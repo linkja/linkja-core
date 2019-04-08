@@ -7,8 +7,8 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.*;
@@ -30,10 +30,12 @@ public class CryptoHelper {
   private static int AES_KEY_SIZE_BYTES = AES_KEY_SIZE_BITS / 8;
   private static int IV_SIZE = 64;
   private static int TAG_BIT_LENGTH = 128;
-  private static String ENCRYPTION_ALGORITHM = "AES/GCM/PKCS5Padding";
+  private static String AES_KEY_ALGORITHM = "AES";
+  private static String AES_ENCRYPTION_ALGORITHM = "AES/GCM/PKCS5Padding";
+  private static String RSA_ENCRYPTION_ALGORITHM = "RSA/ECB/PKCS1Padding";
   private static int CIPHER_OUTPUT_BUFFER_SIZE = 8192;
 
-  private static final byte[] AAD_DATA = "org.linkja.hashing.CryptoHelper".getBytes();
+  private static final byte[] AAD_DATA = "org.linkja.core.CryptoHelper".getBytes();
 
   public class AESParameters {
     public GCMParameterSpec GCMParams = null;
@@ -42,19 +44,20 @@ public class CryptoHelper {
 
   /**
    * Randomly generate the necessary parameters for calling AES encryption.  This uses a locally defined class to
+   * represent the objects created during the process.
    * @return
    * @throws NoSuchAlgorithmException
    */
   public AESParameters generateAESParameters() throws NoSuchAlgorithmException {
     // Generating Key
     SecretKey aesKey = null;
-    KeyGenerator keygen = KeyGenerator.getInstance("AES") ; // Specifying algorithm key will be used for
+    KeyGenerator keygen = KeyGenerator.getInstance(AES_KEY_ALGORITHM) ; // Specifying algorithm key will be used for
     keygen.init(AES_KEY_SIZE_BITS); // Specifying Key size to be used, Note: This would need JCE Unlimited Strength to be installed explicitly
     aesKey = keygen.generateKey();
 
     // Generating IV
     byte iv[] = new byte[IV_SIZE];
-    SecureRandom secRandom = new SecureRandom() ;
+    SecureRandom secRandom = new SecureRandom();
     secRandom.nextBytes(iv); // SecureRandom initialized using self-seeding
 
     // Initialize GCM Parameters
@@ -71,10 +74,10 @@ public class CryptoHelper {
    * to a text file at the provided path.
    * @param publicKeyFile
    * @param aesParameters
-   * @param outputFilePath
+   * @param outputFile
    * @throws Exception
    */
-  public void rsaEncryptAES(File publicKeyFile, AESParameters aesParameters, Path outputFilePath) throws Exception {
+  public void rsaEncryptAES(AESParameters aesParameters, File outputFile, File publicKeyFile) throws Exception {
     BufferedReader reader = new BufferedReader(new FileReader(publicKeyFile));
     PEMParser parser = new PEMParser(reader);
     SubjectPublicKeyInfo spki = (SubjectPublicKeyInfo)parser.readObject();
@@ -86,10 +89,45 @@ public class CryptoHelper {
     System.arraycopy(aesParameters.Key.getEncoded(), 0, unencryptedData, 0, AES_KEY_SIZE_BYTES);
     System.arraycopy(aesParameters.GCMParams.getIV(), 0, unencryptedData, AES_KEY_SIZE_BYTES, IV_SIZE);
 
-    Cipher encrypt = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+    Cipher encrypt = Cipher.getInstance(RSA_ENCRYPTION_ALGORITHM);
     encrypt.init(Cipher.PUBLIC_KEY, publicKeyParam);
     byte[] encryptedData = encrypt.doFinal(unencryptedData);
-    Files.write(outputFilePath, Base64.getEncoder().encode(encryptedData));
+    Files.write(outputFile.toPath(), encryptedData);
+  }
+
+  /**
+   * Given an encrypted file, and a private decryption key, get out the AES key and IV.
+   * @param inputFile
+   * @param privateKey
+   * @return
+   * @throws Exception
+   */
+  public AESParameters rsaDecryptAES(File inputFile, File privateKey) throws Exception {
+    BufferedReader reader = new BufferedReader(new FileReader(privateKey));
+    PEMParser parser = new PEMParser(reader);
+    PEMKeyPair pemKeyPair = (PEMKeyPair) parser.readObject();
+    KeyPair keyPair = new JcaPEMKeyConverter().getKeyPair(pemKeyPair);
+    parser.close();
+    reader.close();
+
+    Cipher decrypt = Cipher.getInstance(RSA_ENCRYPTION_ALGORITHM);
+    decrypt.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
+    byte[] decryptedMessage = decrypt.doFinal(Files.readAllBytes(inputFile.toPath()));
+    if (decryptedMessage == null || decryptedMessage.length != (AES_KEY_SIZE_BITS / 8) + IV_SIZE) {
+      throw new InvalidKeyException("The provided AES key file is invalid.");
+    }
+
+    // At this point we have confirmed our assumption of the size of the data array, so memory access can be done
+    // without issue.
+    SecretKey key = new SecretKeySpec(decryptedMessage, 0, (AES_KEY_SIZE_BITS / 8), AES_KEY_ALGORITHM);
+    byte[] iv = new byte[IV_SIZE];
+    System.arraycopy(decryptedMessage, AES_KEY_SIZE_BYTES, iv, 0, IV_SIZE);
+    GCMParameterSpec gcmParamSpec = new GCMParameterSpec(TAG_BIT_LENGTH, iv);
+
+    AESParameters parameters = new AESParameters();
+    parameters.Key = key;
+    parameters.GCMParams = gcmParamSpec;
+    return parameters;
   }
 
   /**
@@ -106,7 +144,7 @@ public class CryptoHelper {
    * @throws IOException
    */
   public void encryptAES(AESParameters aesParameters, File inputFile, File outputFile) throws InvalidAlgorithmParameterException, InvalidKeyException, NoSuchPaddingException, NoSuchAlgorithmException, IOException {
-    Cipher cipher = Cipher.getInstance(ENCRYPTION_ALGORITHM);
+    Cipher cipher = Cipher.getInstance(AES_ENCRYPTION_ALGORITHM);
     cipher.init(Cipher.ENCRYPT_MODE, aesParameters.Key, aesParameters.GCMParams, new SecureRandom());
     cipher.updateAAD(AAD_DATA); // add AAD tag data before encrypting
 
@@ -137,7 +175,7 @@ public class CryptoHelper {
    * @throws IOException
    */
   public void decryptAES(AESParameters aesParameters, File inputFile, File outputFile) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException, IOException {
-    Cipher cipher = Cipher.getInstance(ENCRYPTION_ALGORITHM);
+    Cipher cipher = Cipher.getInstance(AES_ENCRYPTION_ALGORITHM);
     cipher.init(Cipher.DECRYPT_MODE, aesParameters.Key, aesParameters.GCMParams, new SecureRandom()) ;
     cipher.updateAAD(AAD_DATA) ; // Add AAD details before decrypting
 
@@ -154,27 +192,5 @@ public class CryptoHelper {
     outputStream.flush();
     outputStream.close();
     inputStream.close();
-  }
-
-  /**
-   * Given an encrypted salt file, and a private decryption key, get out the hashing parameters that include site and
-   * project details.  Note that the HashParameters are considered sensitive information, because they are encrypted.
-   * @param inputFile
-   * @param privateKey
-   * @return
-   * @throws Exception
-   */
-  public String decryptRSA(File inputFile, File privateKey) throws Exception {
-    BufferedReader reader = new BufferedReader(new FileReader(privateKey));
-    PEMParser parser = new PEMParser(reader);
-    PEMKeyPair pemKeyPair = (PEMKeyPair) parser.readObject();
-    KeyPair keyPair = new JcaPEMKeyConverter().getKeyPair(pemKeyPair);
-    parser.close();
-    reader.close();
-
-    Cipher decrypt = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-    decrypt.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
-    String decryptedMessage = new String(decrypt.doFinal(Files.readAllBytes(inputFile.toPath())), StandardCharsets.UTF_8);
-    return decryptedMessage;
   }
 }
