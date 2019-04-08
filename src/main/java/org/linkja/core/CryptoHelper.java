@@ -103,16 +103,7 @@ public class CryptoHelper {
    * @throws Exception
    */
   public AESParameters rsaDecryptAES(File inputFile, File privateKey) throws Exception {
-    BufferedReader reader = new BufferedReader(new FileReader(privateKey));
-    PEMParser parser = new PEMParser(reader);
-    PEMKeyPair pemKeyPair = (PEMKeyPair) parser.readObject();
-    KeyPair keyPair = new JcaPEMKeyConverter().getKeyPair(pemKeyPair);
-    parser.close();
-    reader.close();
-
-    Cipher decrypt = Cipher.getInstance(RSA_ENCRYPTION_ALGORITHM);
-    decrypt.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
-    byte[] decryptedMessage = decrypt.doFinal(Files.readAllBytes(inputFile.toPath()));
+    byte[] decryptedMessage = decryptRSA(inputFile, privateKey);
     if (decryptedMessage == null || decryptedMessage.length != (AES_KEY_SIZE_BITS / 8) + IV_SIZE) {
       throw new InvalidKeyException("The provided AES key file is invalid.");
     }
@@ -128,6 +119,20 @@ public class CryptoHelper {
     parameters.Key = key;
     parameters.GCMParams = gcmParamSpec;
     return parameters;
+  }
+
+  /**
+   * Given an encrypted file and a private decryption key, retrieve the unencrypted bytes.
+   * @param inputFile
+   * @param privateKey
+   * @return
+   * @throws Exception
+   */
+  public byte[] decryptRSA(File inputFile, File privateKey) throws Exception {
+    KeyPair keyPair = getRSAPrivateKey(privateKey);
+    Cipher decrypt = Cipher.getInstance(RSA_ENCRYPTION_ALGORITHM);
+    decrypt.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
+    return decrypt.doFinal(Files.readAllBytes(inputFile.toPath()));
   }
 
   /**
@@ -192,5 +197,21 @@ public class CryptoHelper {
     outputStream.flush();
     outputStream.close();
     inputStream.close();
+  }
+
+  /**
+   * Helper method to create the KeyPair object that represents our RSA private key
+   * @param privateKey
+   * @return
+   * @throws Exception
+   */
+  private KeyPair getRSAPrivateKey(File privateKey) throws Exception {
+    BufferedReader reader = new BufferedReader(new FileReader(privateKey));
+    PEMParser parser = new PEMParser(reader);
+    PEMKeyPair pemKeyPair = (PEMKeyPair) parser.readObject();
+    KeyPair keyPair = new JcaPEMKeyConverter().getKeyPair(pemKeyPair);
+    parser.close();
+    reader.close();
+    return keyPair;
   }
 }
