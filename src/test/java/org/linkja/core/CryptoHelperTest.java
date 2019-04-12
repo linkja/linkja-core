@@ -40,8 +40,8 @@ class CryptoHelperTest {
   @Test
   void rsa_aesKeyRoundtrip() throws Exception {
     ClassLoader classLoader = getClass().getClassLoader();
-    File publicKeyFile = new File(classLoader.getResource("public-test.key").getFile());
-    File privateKeyFile = new File(classLoader.getResource("private-test.key").getFile());
+    File publicKeyFile = new File(classLoader.getResource("public-test.key").toURI());
+    File privateKeyFile = new File(classLoader.getResource("private-test.key").toURI());
     File output = File.createTempFile("linkja-core-test-output", ".bin");
     File decryptTest = File.createTempFile("linkja-core-test-decrypt", ".txt");
     output.deleteOnExit();

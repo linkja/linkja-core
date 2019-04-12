@@ -7,30 +7,32 @@ linkja-core was built using Java JDK 1.8 (specifically [OpenJDK](https://openjdk
 
 `mvn clean package`
 
-This will compile the code, run all unit tests, and create a distributable JAR file under the .\target folder.  The JAR will be named something like `core-1.0.jar`.
+This will compile the code, run all unit tests, and create a distributable JAR file under the .\target folder.  The JAR will be named something like `linkja-core-1.0.jar`.
 
 
-## Deploying
-The associated linkja projects that use linka-core will contain instructions for referencing the core JAR from a local maven repository.  For now, we are recommending the project structure be set up so that all of the linkja-* projects are in a subdirectory, and that a shared local maven repository folder be set up for all projects to access.
+## Deploying to Maven Repository
+Linkja uses the [linkja-mvn-repo](https://github.com/linkja/linkja-mvn-repo) GitHub repository as its Maven repository for project builds.
 
-For example, your project structure may be set up like this:
+The associated linkja projects that use linka-core will contain a reference to the GitHub repository in their pom.xml file.  Updates will need to be made to the linkja-mvn-repo and pushed to the master branch before projects will pick them up.
+
+If you plan to build and deploy linkja-core, it's recommended you clone both of the repositories into the same directory.  For example:
 
 ```
 /Users/me/Development/
   - linkja/
     - linkja-core/
-    - linkja-hashing/
-    - mvn-repo/
+    - linkja-mvn-repo/
 ```
 
-After building the JAR, you would deploy it to the local repository using the following command (adjusted depending on the version you are building and deploying):
+After building the JAR, you would deploy it to the local copy of the linkja-mvn-repo repository using the following command:
 
+`mvn deploy`
 
-```
-mvn deploy:deploy-file -Durl=file:///Users/me/Development/linkja/mvn-repo
-  -Dfile=./target/core-1.0.jar -DgroupId=org.linkja -DartifactId=core
-  -Dpackaging=jar -Dversion=1.0
-```
+Finally, you will need to commit the changes made in linkja-mvn-repo, and push the changes to the master branch in GitHub.  Your other projects (e.g., linkja-hashing) should now be able to pull down the new version.
+
+If you are updating an existing version of linkja-core and not bumping the version (discouraged, but just in case...), remember that your local projects will have cached the Maven dependencies.  You will need to force the Maven dependencies to be pulled back down.  From your project, like linkja-hashing, run the following command:
+
+`mvn clean install -U`
 
 ## Implementation Details
 ### Encryption
