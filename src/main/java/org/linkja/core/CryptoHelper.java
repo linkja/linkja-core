@@ -10,9 +10,7 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.*;
-import java.util.Base64;
 
 /**
  *
@@ -78,20 +76,11 @@ public class CryptoHelper {
    * @throws Exception
    */
   public void rsaEncryptAES(AESParameters aesParameters, File outputFile, File publicKeyFile) throws Exception {
-    BufferedReader reader = new BufferedReader(new FileReader(publicKeyFile));
-    PEMParser parser = new PEMParser(reader);
-    SubjectPublicKeyInfo spki = (SubjectPublicKeyInfo)parser.readObject();
-    parser.close();
-    reader.close();
-    PublicKey publicKeyParam = new JcaPEMKeyConverter().getPublicKey(spki);
-
     byte[] unencryptedData = new byte[(AES_KEY_SIZE_BITS / 8) + IV_SIZE];
     System.arraycopy(aesParameters.Key.getEncoded(), 0, unencryptedData, 0, AES_KEY_SIZE_BYTES);
     System.arraycopy(aesParameters.GCMParams.getIV(), 0, unencryptedData, AES_KEY_SIZE_BYTES, IV_SIZE);
 
-    Cipher encrypt = Cipher.getInstance(RSA_ENCRYPTION_ALGORITHM);
-    encrypt.init(Cipher.PUBLIC_KEY, publicKeyParam);
-    byte[] encryptedData = encrypt.doFinal(unencryptedData);
+    byte[] encryptedData = encryptRSA(unencryptedData, publicKeyFile);
     Files.write(outputFile.toPath(), encryptedData);
   }
 
@@ -129,10 +118,49 @@ public class CryptoHelper {
    * @throws Exception
    */
   public byte[] decryptRSA(File inputFile, File privateKey) throws Exception {
+    byte[] inputData = Files.readAllBytes(inputFile.toPath());
+    return decryptRSA(inputData, privateKey);
+  }
+
+  /**
+   * Decrypt binary data using an RSA private key, and return the decrypted binary data.
+   * @param inputData
+   * @param privateKey
+   * @return
+   * @throws Exception
+   */
+  public byte[] decryptRSA(byte[] inputData, File privateKey) throws Exception {
     KeyPair keyPair = getRSAPrivateKey(privateKey);
     Cipher decrypt = Cipher.getInstance(RSA_ENCRYPTION_ALGORITHM);
     decrypt.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
-    return decrypt.doFinal(Files.readAllBytes(inputFile.toPath()));
+    return decrypt.doFinal(inputData);
+  }
+
+  /**
+   * Encrypt a file containing data using an RSA public key, and return the encrypted binary data.
+   * @param inputFile
+   * @param publicKeyFile
+   * @return
+   * @throws Exception
+   */
+  public byte[] encryptRSA(File inputFile, File publicKeyFile) throws Exception {
+    byte[] inputData = Files.readAllBytes(inputFile.toPath());
+    return encryptRSA(inputData, publicKeyFile);
+  }
+
+  /**
+   * Encrypt binary data using an RSA public key, and return the encrypted binary data.
+   * @param inputData
+   * @param publicKeyFile
+   * @return
+   * @throws Exception
+   */
+  public byte[] encryptRSA(byte[] inputData, File publicKeyFile) throws Exception {
+    PublicKey publicKey = getRSAPublicKey(publicKeyFile);
+    Cipher encrypt = Cipher.getInstance(RSA_ENCRYPTION_ALGORITHM);
+    encrypt.init(Cipher.PUBLIC_KEY, publicKey);
+    byte[] encryptedData = encrypt.doFinal(inputData);
+    return encryptedData;
   }
 
   /**
@@ -201,11 +229,11 @@ public class CryptoHelper {
 
   /**
    * Helper method to create the KeyPair object that represents our RSA private key
-   * @param privateKey
+   * @param privateKey The File containing the RSA private key
    * @return
    * @throws Exception
    */
-  private KeyPair getRSAPrivateKey(File privateKey) throws Exception {
+  public KeyPair getRSAPrivateKey(File privateKey) throws Exception {
     BufferedReader reader = new BufferedReader(new FileReader(privateKey));
     PEMParser parser = new PEMParser(reader);
     PEMKeyPair pemKeyPair = (PEMKeyPair) parser.readObject();
@@ -213,5 +241,21 @@ public class CryptoHelper {
     parser.close();
     reader.close();
     return keyPair;
+  }
+
+  /**
+   * Helper method to create the PublicKey object that represents our RSA public key
+   * @param publicKeyFile The File containing the RSA public key
+   * @return
+   * @throws IOException
+   */
+  public PublicKey getRSAPublicKey(File publicKeyFile) throws IOException {
+    BufferedReader reader = new BufferedReader(new FileReader(publicKeyFile));
+    PEMParser parser = new PEMParser(reader);
+    SubjectPublicKeyInfo spki = (SubjectPublicKeyInfo)parser.readObject();
+    parser.close();
+    reader.close();
+    PublicKey publicKey = new JcaPEMKeyConverter().getPublicKey(spki);
+    return publicKey;
   }
 }
