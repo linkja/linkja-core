@@ -5,11 +5,10 @@ import org.junit.jupiter.api.Test;
 import javax.crypto.NoSuchPaddingException;
 import java.io.File;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
+import java.security.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -72,5 +71,54 @@ class CryptoHelperTest {
     helper.decryptAES(parameters, output, decryptTest);
     String result = String.join("", Files.readAllLines(decryptTest.toPath()));
     assertEquals(DATA, result);
+  }
+
+  @Test
+  void rsa_roundtrip() throws Exception {
+    final String DATA = "This is a sample set of data";
+    ClassLoader classLoader = getClass().getClassLoader();
+    File publicKeyFile = new File(classLoader.getResource("public-test.key").toURI());
+    File privateKeyFile = new File(classLoader.getResource("private-test.key").toURI());
+
+    CryptoHelper helper = new CryptoHelper();
+    byte[] encryptedData = helper.encryptRSA(DATA.getBytes(), publicKeyFile);
+    byte[] decryptedData = helper.decryptRSA(encryptedData, privateKeyFile);
+    String decryptedString = new String(decryptedData);
+    assertEquals(DATA, decryptedString);
+  }
+
+  @Test
+  void getRSAPrivateKey_Invalid() throws Exception {
+    ClassLoader classLoader = getClass().getClassLoader();
+    File privateKeyFile = new File(classLoader.getResource("invalid-test.key").toURI());
+    CryptoHelper helper = new CryptoHelper();
+    assertThrows(Exception.class, () -> helper.getRSAPrivateKey(privateKeyFile));
+  }
+
+  @Test
+  void getRSAPrivateKey_Valid() throws Exception {
+    ClassLoader classLoader = getClass().getClassLoader();
+    File privateKeyFile = new File(classLoader.getResource("private-test.key").toURI());
+    CryptoHelper helper = new CryptoHelper();
+    KeyPair privateKey = helper.getRSAPrivateKey(privateKeyFile);
+    assertNotNull(privateKey);
+    assertNotNull(privateKey.getPrivate());
+  }
+
+  @Test
+  void getRSAPublicKey_Invalid() throws Exception {
+    ClassLoader classLoader = getClass().getClassLoader();
+    File publicKeyFile = new File(classLoader.getResource("invalid-test.key").toURI());
+    CryptoHelper helper = new CryptoHelper();
+    assertThrows(Exception.class, () -> helper.getRSAPublicKey(publicKeyFile));
+  }
+
+  @Test
+  void getRSAPublicKey_Valid() throws Exception {
+    ClassLoader classLoader = getClass().getClassLoader();
+    File publicKeyFile = new File(classLoader.getResource("public-test.key").toURI());
+    CryptoHelper helper = new CryptoHelper();
+    PublicKey publicKey = helper.getRSAPublicKey(publicKeyFile);
+    assertNotNull(publicKey);
   }
 }
