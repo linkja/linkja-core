@@ -3,7 +3,7 @@
 This project contains classes shared across the linkja applications. Additional documentation is also provided regarding implementations regarding  [encryption](#encryption), and [exception handling](#exception-handling).
 
 ## Building
-linkja-core was built using Java JDK 1.8 (specifically [OpenJDK](https://openjdk.java.net/)).  It can be opened from within an IDE like Eclipse or IntelliJ IDEA and compiled, or compiled from the command line using [Maven](https://maven.apache.org/).
+linkja-core was built using Java JDK 10 (specifically [OpenJDK](https://openjdk.java.net/)).  It can be opened from within an IDE like Eclipse or IntelliJ IDEA and compiled, or compiled from the command line using [Maven](https://maven.apache.org/).
 
 `mvn clean package`
 
