@@ -1,4 +1,4 @@
-package org.linkja.saltengine;
+package org.linkja.core;
 
 import org.junit.jupiter.api.Test;
 import org.linkja.core.FileHelper;

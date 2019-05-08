@@ -17,27 +17,22 @@ public class SaltFile {
    */
   public final static int ABS_MIN_SALT_LENGTH = 13;
 
-  private String siteId;
-  private String siteName;
+  private Site site;
   private String privateSalt;
   private String projectSalt;
   private String projectName;
   private int minSaltLength;
 
-  public String getSiteId() {
-    return siteId;
-  }
-
-  public void setSiteId(String siteId) {
-    this.siteId = siteId;
+  public String getSiteID() {
+    return site.getSiteID();
   }
 
   public String getSiteName() {
-    return siteName;
+    return site.getSiteName();
   }
 
-  public void setSiteName(String siteName) {
-    this.siteName = siteName;
+  public void setSite(Site site) {
+    this.site = site;
   }
 
   public String getPrivateSalt() {
@@ -75,7 +70,10 @@ public class SaltFile {
     this.minSaltLength = minSaltLength;
   }
 
-  public SaltFile() { this.minSaltLength = ABS_MIN_SALT_LENGTH; }
+  public SaltFile() {
+    this.minSaltLength = ABS_MIN_SALT_LENGTH;
+    this.site = new Site();
+  }
 
   /**
    * Loads an encrypted salt file and populates this object with the appropriate values
@@ -96,8 +94,8 @@ public class SaltFile {
     }
 
     // At this point we have to assume that everything is in the right position, so we will load by position.
-    setSiteId(saltParts[0]);
-    setSiteName(saltParts[1]);
+    site.setSiteID(saltParts[0]);
+    site.setSiteName(saltParts[1]);
     setPrivateSalt(saltParts[2]);
     setProjectSalt(saltParts[3]);
     setProjectName(saltParts[4]);
@@ -124,9 +122,13 @@ public class SaltFile {
       throw new LinkjaException("You must specify a file to write to, and the public to to use for encryption");
     }
 
+    if (this.site == null) {
+      throw new LinkjaException("Please specify the site information in order to create the salt file");
+    }
+
     CryptoHelper helper = new CryptoHelper();
     String hashFileContent = String.format("%s,%s,%s,%s,%s",
-            getSiteId(), getSiteName(), getPrivateSalt(), getProjectSalt(), getProjectName());
+            getSiteID(), getSiteName(), getPrivateSalt(), getProjectSalt(), getProjectName());
     Files.write(saltFile.toPath(), helper.encryptRSA(hashFileContent.getBytes(), publicKey));
   }
 

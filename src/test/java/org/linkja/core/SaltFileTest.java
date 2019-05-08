@@ -50,7 +50,7 @@ class SaltFileTest {
 
     SaltFile file = new SaltFile();
     file.decrypt(encryptedSaltFile, privateKeyFile);
-    assertEquals(saltFileContents[0], file.getSiteId());
+    assertEquals(saltFileContents[0], file.getSiteID());
     assertEquals(saltFileContents[1], file.getSiteName());
     assertEquals(saltFileContents[2], file.getPrivateSalt());
     assertEquals(saltFileContents[3], file.getProjectSalt());
@@ -69,47 +69,49 @@ class SaltFileTest {
 
   @Test
   void getSaltFileName_NullEmpty() {
-    SaltFile engine = new SaltFile();
-    LinkjaException exception = assertThrows(LinkjaException.class, () -> engine.getSaltFileName(null, "ok"));
+    SaltFile file = new SaltFile();
+    LinkjaException exception = assertThrows(LinkjaException.class, () -> file.getSaltFileName(null, "ok"));
     assertTrue(exception.getMessage().equals("The project name cannot be empty"));
-    exception = assertThrows(LinkjaException.class, () -> engine.getSaltFileName("", "ok"));
+    exception = assertThrows(LinkjaException.class, () -> file.getSaltFileName("", "ok"));
     assertTrue(exception.getMessage().equals("The project name cannot be empty"));
-    exception = assertThrows(LinkjaException.class, () -> engine.getSaltFileName("ok", null));
+    exception = assertThrows(LinkjaException.class, () -> file.getSaltFileName("ok", null));
     assertTrue(exception.getMessage().equals("The site ID cannot be empty"));
-    exception = assertThrows(LinkjaException.class, () -> engine.getSaltFileName("ok", ""));
+    exception = assertThrows(LinkjaException.class, () -> file.getSaltFileName("ok", ""));
     assertTrue(exception.getMessage().equals("The site ID cannot be empty"));
   }
 
   @Test
   void getSaltFileName_ValidParameters() throws LinkjaException {
-    SaltFile engine = new SaltFile();
-    assertTrue(engine.getSaltFileName("1", "2").startsWith("1_2_"));
-    assertTrue(engine.getSaltFileName("project1", "001").startsWith("project1_001_"));
+    SaltFile file = new SaltFile();
+    assertTrue(file.getSaltFileName("1", "2").startsWith("1_2_"));
+    assertTrue(file.getSaltFileName("project1", "001").startsWith("project1_001_"));
   }
 
   @Test
   void getSaltFileName_ReplaceCharacters() throws LinkjaException {
-    SaltFile engine = new SaltFile();
-    assertTrue(engine.getSaltFileName(" _ & 0zee ", "1 !!!").startsWith("_0zee_1_"));
+    SaltFile file = new SaltFile();
+    assertTrue(file.getSaltFileName(" _ & 0zee ", "1 !!!").startsWith("_0zee_1_"));
     //TODO - ideally we should make sure after stripping invalid characters we're left with something. Maybe in the future?
-    assertTrue(engine.getSaltFileName("*@()(#)$ ", " !!!").startsWith("__"));
+    assertTrue(file.getSaltFileName("*@()(#)$ ", " !!!").startsWith("__"));
   }
 
   @Test
   void encrypt() throws Exception {
     ClassLoader classLoader = getClass().getClassLoader();
-    File publicKeyFile = new File(classLoader.getResource("public-key-1.pem").toURI());
-    File privateKeyFile = new File(classLoader.getResource("private-key-1.pem").toURI());
+    File publicKeyFile = new File(classLoader.getResource("public-test.key").toURI());
+    File privateKeyFile = new File(classLoader.getResource("private-test.key").toURI());
     File testFile = File.createTempFile("test", ".txt");  // Gives us a known temp folder
     testFile.deleteOnExit();
 
     Site site = new Site("001", "Test Site", publicKeyFile);
     Path rootPath = testFile.getParentFile().toPath();
 
-    SaltFile engine = new SaltFile();
-    engine.setProjectName("Test Project");
-    engine.generateSaltFile(site, "0123456789123", rootPath);
-    String saltFileName = engine.getSaltFileName(engine.getProjectName(), site.getSiteID());
+    SaltFile file = new SaltFile();
+    file.setSite(site);
+    file.setProjectName("Test Project");
+    String saltFileName = file.getSaltFileName(file.getProjectName(), site.getSiteID());
+    Path saltFilePath = Paths.get(rootPath.toString(), saltFileName);
+    file.encrypt(saltFilePath.toFile(), publicKeyFile);
 
     CryptoHelper helper = new CryptoHelper();
     String data = new String(helper.decryptRSA(Paths.get(rootPath.toString(), saltFileName).toFile(), privateKeyFile));
