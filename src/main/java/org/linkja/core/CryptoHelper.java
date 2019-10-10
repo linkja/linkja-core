@@ -24,14 +24,14 @@ import java.security.*;
  * is why we don't have direct inclusion/attribution of those source files.
  */
 public class CryptoHelper {
-  private static int AES_KEY_SIZE_BITS = 256;
-  private static int AES_KEY_SIZE_BYTES = AES_KEY_SIZE_BITS / 8;
-  private static int IV_SIZE = 64;
-  private static int TAG_BIT_LENGTH = 128;
-  private static String AES_KEY_ALGORITHM = "AES";
-  private static String AES_ENCRYPTION_ALGORITHM = "AES/GCM/PKCS5Padding";
-  private static String RSA_ENCRYPTION_ALGORITHM = "RSA/ECB/PKCS1Padding";
-  private static int CIPHER_OUTPUT_BUFFER_SIZE = 8192;
+  private static final int AES_KEY_SIZE_BITS = 256;
+  private static final int AES_KEY_SIZE_BYTES = AES_KEY_SIZE_BITS / 8;
+  private static final int IV_SIZE = 64;
+  private static final int TAG_BIT_LENGTH = 128;
+  private static final String AES_KEY_ALGORITHM = "AES";
+  private static final String AES_ENCRYPTION_ALGORITHM = "AES/GCM/PKCS5Padding";
+  private static final String RSA_ENCRYPTION_ALGORITHM = "RSA/ECB/PKCS1Padding";
+  private static final int CIPHER_OUTPUT_BUFFER_SIZE = 8192;
 
   private static final byte[] AAD_DATA = "org.linkja.core.CryptoHelper".getBytes();
 

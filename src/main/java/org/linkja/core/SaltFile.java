@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 public class SaltFile {
   public final static String SALT_FILE_DELIMITER = ",";
@@ -76,6 +77,25 @@ public class SaltFile {
   }
 
   /**
+   * Loads a plain (unencrypted) salt file and populates this object with the appropriate values
+   * @param saltFile
+   * @throws Exception
+   */
+  public void load(File saltFile) throws Exception {
+    if (saltFile == null) {
+      throw new LinkjaException("You must specify the salt file to load");
+    }
+
+    List<String> saltMessage = Files.readAllLines(saltFile.toPath());
+    if (saltMessage == null || saltMessage.size() != 1) {
+      throw new LinkjaException("The salt file must contain exactly one line");
+    }
+
+    String[] saltParts = saltMessage.get(0).split(SALT_FILE_DELIMITER);
+    loadFromParts(saltParts);
+  }
+
+  /**
    * Loads an encrypted salt file and populates this object with the appropriate values
    * @param saltFile
    * @param privateKey
@@ -89,24 +109,28 @@ public class SaltFile {
     CryptoHelper helper = new CryptoHelper();
     String decryptedMessage = new String(helper.decryptRSA(saltFile, privateKey), StandardCharsets.UTF_8);
     String[] saltParts = decryptedMessage.split(SALT_FILE_DELIMITER);
-    if (saltParts == null || saltParts.length < NUM_SALT_PARTS) {
+    loadFromParts(saltParts);
+  }
+
+  public void loadFromParts(String[] parts) throws LinkjaException {
+    if (parts == null || parts.length < NUM_SALT_PARTS) {
       throw new LinkjaException("The salt file was not in the expected format.  Please confirm that you are referencing the correct file");
     }
 
     // At this point we have to assume that everything is in the right position, so we will load by position.
-    site.setSiteID(saltParts[0]);
-    site.setSiteName(saltParts[1]);
-    setPrivateSalt(saltParts[2]);
-    setProjectSalt(saltParts[3]);
-    setProjectName(saltParts[4]);
+    site.setSiteID(parts[0]);
+    site.setSiteName(parts[1]);
+    setPrivateSalt(parts[2]);
+    setProjectSalt(parts[3]);
+    setProjectName(parts[4]);
 
     if (this.projectSalt.length() < minSaltLength) {
       throw new LinkjaException(String.format("The project salt must be at least %d characters long, but the one provided is %d",
-              minSaltLength, this.projectSalt.length()));
+        minSaltLength, this.projectSalt.length()));
     }
     if (this.privateSalt.length() < minSaltLength) {
       throw new LinkjaException(String.format("The private (site-specific) salt must be at least %d characters long, but the one provided is %d",
-              minSaltLength, this.privateSalt.length()));
+        minSaltLength, this.privateSalt.length()));
     }
   }
 
