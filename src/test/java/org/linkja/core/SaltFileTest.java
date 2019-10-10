@@ -68,6 +68,35 @@ class SaltFileTest {
   }
 
   @Test
+  void load_null() {
+    SaltFile file = new SaltFile();
+    assertThrows(LinkjaException.class, () -> file.load(null));
+  }
+
+  @Test
+  void load_invalid() throws Exception {
+    ClassLoader classLoader = getClass().getClassLoader();
+    File saltFile = new File(classLoader.getResource("invalid_salt.txt").toURI());
+    SaltFile file = new SaltFile();
+    assertThrows(LinkjaException.class, () -> file.load(saltFile));
+  }
+
+  @Test
+  void load_valid() throws Exception {
+    ClassLoader classLoader = getClass().getClassLoader();
+    File saltFile = new File(classLoader.getResource("unencrypted_salt.txt").toURI());
+    String[] saltFileContents = Files.readAllLines(saltFile.toPath()).get(0).split(",");
+
+    SaltFile file = new SaltFile();
+    file.load(saltFile);
+    assertEquals(saltFileContents[0], file.getSiteID());
+    assertEquals(saltFileContents[1], file.getSiteName());
+    assertEquals(saltFileContents[2], file.getPrivateSalt());
+    assertEquals(saltFileContents[3], file.getProjectSalt());
+    assertEquals(saltFileContents[4], file.getProjectName());
+  }
+
+  @Test
   void getSaltFileName_NullEmpty() {
     SaltFile file = new SaltFile();
     LinkjaException exception = assertThrows(LinkjaException.class, () -> file.getSaltFileName(null, "ok"));
@@ -103,7 +132,7 @@ class SaltFileTest {
     File testFile = File.createTempFile("test", ".txt");  // Gives us a known temp folder
     testFile.deleteOnExit();
 
-    Site site = new Site("001", "Test Site", publicKeyFile);
+    Site site = new Site("001", "Test Site");
     Path rootPath = testFile.getParentFile().toPath();
 
     SaltFile file = new SaltFile();
