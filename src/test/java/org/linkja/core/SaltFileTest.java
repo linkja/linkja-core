@@ -97,6 +97,37 @@ class SaltFileTest {
   }
 
   @Test
+  void save_null() {
+    SaltFile file = new SaltFile();
+    assertThrows(LinkjaException.class, () -> file.save(null));
+  }
+
+  @Test
+  void save_valid() throws Exception {
+    ClassLoader classLoader = getClass().getClassLoader();
+
+    // Load the gold standard
+    File saltFile = new File(classLoader.getResource("unencrypted_salt.txt").toURI());
+    String validSaltFileContents = Files.readAllLines(saltFile.toPath()).get(0);
+
+    // Create a SaltFile object from that content
+    SaltFile file = new SaltFile();
+    file.load(saltFile);
+
+    // Call the save method.  Yes it's the same content, but that's the test.  We just want
+    // it to write to another file.
+    File tempFile = File.createTempFile("salt-", ".txt");
+    tempFile.deleteOnExit();
+    file.save(tempFile);
+
+    // Reload to see what we wrote
+    String saltFileContents = Files.readAllLines(tempFile.toPath()).get(0);
+
+    // Make sure it's the same
+    assertEquals(validSaltFileContents, saltFileContents);
+  }
+
+  @Test
   void getSaltFileName_NullEmpty() {
     SaltFile file = new SaltFile();
     LinkjaException exception = assertThrows(LinkjaException.class, () -> file.getSaltFileName(null, "ok"));
