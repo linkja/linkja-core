@@ -1,6 +1,7 @@
 package org.linkja.core;
 
 import java.io.File;
+import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
@@ -93,6 +94,29 @@ public class SaltFile {
 
     String[] saltParts = saltMessage.get(0).split(SALT_FILE_DELIMITER);
     loadFromParts(saltParts);
+  }
+
+  /**
+   * Writes a plain (unencrypted) salt file from the values in this object
+   * @param saltFile
+   * @throws Exception
+   */
+  public void save(File saltFile) throws Exception {
+    if (saltFile == null) {
+      throw new LinkjaException("You must specify the salt file to save");
+    }
+
+    try (PrintWriter out = new PrintWriter(saltFile)) {
+      out.print(site.getSiteID());
+      out.print(SALT_FILE_DELIMITER);
+      out.print(site.getSiteName());
+      out.print(SALT_FILE_DELIMITER);
+      out.print(getPrivateSalt());
+      out.print(SALT_FILE_DELIMITER);
+      out.print(getProjectSalt());
+      out.print(SALT_FILE_DELIMITER);
+      out.println(getProjectName());
+    }
   }
 
   /**
