@@ -4,7 +4,7 @@ import org.linkja.crypto.Library;
 
 import java.util.Arrays;
 
-public class AesEncryptParameters {
+public class AesEncryptParameters implements Cloneable {
   public static final String ALGORITHM_NAME = "AES-256";
 
   private byte[] key;
@@ -86,5 +86,14 @@ public class AesEncryptParameters {
     result = 31 * result + Arrays.hashCode(iv);
     result = 31 * result + Arrays.hashCode(aad);
     return result;
+  }
+
+  @Override
+  public AesEncryptParameters clone() {
+    AesEncryptParameters cloned = new AesEncryptParameters(
+      this.key == null ? null : this.key.clone(),
+      this.iv == null ? null : this.iv.clone(),
+      this.aad == null ? null : this.aad.clone());
+    return cloned;
   }
 }
