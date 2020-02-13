@@ -26,48 +26,6 @@ class SaltFileTest {
   }
 
   @Test
-  void decrypt_null() {
-    SaltFile file = new SaltFile();
-    assertThrows(LinkjaException.class, () -> file.decrypt(null, null));
-  }
-
-  @Test
-  void decrypt_invalid() throws Exception {
-    ClassLoader classLoader = getClass().getClassLoader();
-    File privateKeyFile = new File(classLoader.getResource("private-test.key").toURI());
-    File encryptedSaltFile = new File(classLoader.getResource("invalid_encrypted_salt.txt").toURI());
-    SaltFile file = new SaltFile();
-    assertThrows(javax.crypto.BadPaddingException.class, () -> file.decrypt(encryptedSaltFile, privateKeyFile));
-  }
-
-  @Test
-  void decrypt_valid() throws Exception {
-    ClassLoader classLoader = getClass().getClassLoader();
-    File privateKeyFile = new File(classLoader.getResource("private-test.key").toURI());
-    File encryptedSaltFile = new File(classLoader.getResource("encrypted_salt.txt").toURI());
-    File decryptedSaltFile = new File(classLoader.getResource("unencrypted_salt.txt").toURI());
-    String[] saltFileContents = Files.readAllLines(decryptedSaltFile.toPath()).get(0).split(",");
-
-    SaltFile file = new SaltFile();
-    file.decrypt(encryptedSaltFile, privateKeyFile);
-    assertEquals(saltFileContents[0], file.getSiteID());
-    assertEquals(saltFileContents[1], file.getSiteName());
-    assertEquals(saltFileContents[2], file.getPrivateSalt());
-    assertEquals(saltFileContents[3], file.getProjectSalt());
-    assertEquals(saltFileContents[4], file.getProjectName());
-  }
-
-  @Test
-  void decrypt_saltTooShort() throws Exception {
-    ClassLoader classLoader = getClass().getClassLoader();
-    File privateKeyFile = new File(classLoader.getResource("private-test.key").toURI());
-    File encryptedSaltFile = new File(classLoader.getResource("encrypted_salt.txt").toURI());
-    SaltFile file = new SaltFile();
-    file.setMinSaltLength(10000);
-    assertThrows(LinkjaException.class, () -> file.decrypt(encryptedSaltFile, privateKeyFile));
-  }
-
-  @Test
   void load_null() {
     SaltFile file = new SaltFile();
     assertThrows(LinkjaException.class, () -> file.load(null));
@@ -153,29 +111,5 @@ class SaltFileTest {
     assertTrue(file.getSaltFileName(" _ & 0zee ", "1 !!!").startsWith("_0zee_1_"));
     //TODO - ideally we should make sure after stripping invalid characters we're left with something. Maybe in the future?
     assertTrue(file.getSaltFileName("*@()(#)$ ", " !!!").startsWith("__"));
-  }
-
-  @Test
-  void encrypt() throws Exception {
-    ClassLoader classLoader = getClass().getClassLoader();
-    File publicKeyFile = new File(classLoader.getResource("public-test.key").toURI());
-    File privateKeyFile = new File(classLoader.getResource("private-test.key").toURI());
-    File testFile = File.createTempFile("test", ".txt");  // Gives us a known temp folder
-    testFile.deleteOnExit();
-
-    Site site = new Site("001", "Test Site");
-    Path rootPath = testFile.getParentFile().toPath();
-
-    SaltFile file = new SaltFile();
-    file.setSite(site);
-    file.setProjectName("Test Project");
-    String saltFileName = file.getSaltFileName(file.getProjectName(), site.getSiteID());
-    Path saltFilePath = Paths.get(rootPath.toString(), saltFileName);
-    file.encrypt(saltFilePath.toFile(), publicKeyFile);
-
-    CryptoHelper helper = new CryptoHelper();
-    String data = new String(helper.decryptRSA(Paths.get(rootPath.toString(), saltFileName).toFile(), privateKeyFile));
-    assertTrue(data.startsWith("001,Test Site,"));
-    assertTrue(data.endsWith(",Test Project"));
   }
 }
