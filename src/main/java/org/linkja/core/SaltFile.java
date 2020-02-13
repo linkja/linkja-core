@@ -2,7 +2,6 @@ package org.linkja.core;
 
 import java.io.File;
 import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -119,23 +118,6 @@ public class SaltFile {
     }
   }
 
-  /**
-   * Loads an encrypted salt file and populates this object with the appropriate values
-   * @param saltFile
-   * @param privateKey
-   * @throws Exception
-   */
-  public void decrypt(File saltFile, File privateKey) throws Exception {
-    if (saltFile == null || privateKey == null) {
-      throw new LinkjaException("You must specify the encrypted salt file as well as the private key");
-    }
-
-    CryptoHelper helper = new CryptoHelper();
-    String decryptedMessage = new String(helper.decryptRSA(saltFile, privateKey), StandardCharsets.UTF_8);
-    String[] saltParts = decryptedMessage.split(SALT_FILE_DELIMITER);
-    loadFromParts(saltParts);
-  }
-
   public void loadFromParts(String[] parts) throws LinkjaException {
     if (parts == null || parts.length < NUM_SALT_PARTS) {
       throw new LinkjaException("The salt file was not in the expected format.  Please confirm that you are referencing the correct file");
@@ -156,28 +138,6 @@ public class SaltFile {
       throw new LinkjaException(String.format("The private (site-specific) salt must be at least %d characters long, but the one provided is %d",
         minSaltLength, this.privateSalt.length()));
     }
-  }
-
-  /**
-   * Takes the current salt file fields and creates an encrypted version of the salt file using the supplied
-   * RSA public key
-   * @param saltFile
-   * @param publicKey
-   * @throws Exception
-   */
-  public void encrypt(File saltFile, File publicKey) throws Exception {
-    if (saltFile == null || publicKey == null) {
-      throw new LinkjaException("You must specify a file to write to, and the public to to use for encryption");
-    }
-
-    if (this.site == null) {
-      throw new LinkjaException("Please specify the site information in order to create the salt file");
-    }
-
-    CryptoHelper helper = new CryptoHelper();
-    String hashFileContent = String.format("%s,%s,%s,%s,%s",
-            getSiteID(), getSiteName(), getPrivateSalt(), getProjectSalt(), getProjectName());
-    Files.write(saltFile.toPath(), helper.encryptRSA(hashFileContent.getBytes(), publicKey));
   }
 
   /**

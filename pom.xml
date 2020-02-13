@@ -79,6 +79,12 @@
             <artifactId>bcpkix-jdk15on</artifactId>
             <version>${bouncycastle.version}</version>
         </dependency>
+
+        <dependency>
+          <groupId>org.linkja</groupId>
+          <artifactId>linkja-crypto</artifactId>
+          <version>0.4.1</version>
+        </dependency>
     </dependencies>
 
     <build>

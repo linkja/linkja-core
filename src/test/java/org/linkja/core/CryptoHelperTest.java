@@ -1,6 +1,7 @@
 package org.linkja.core;
 
 import org.junit.jupiter.api.Test;
+import org.linkja.core.crypto.CryptoHelper;
 
 import javax.crypto.NoSuchPaddingException;
 import java.io.File;
