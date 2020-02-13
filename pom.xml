@@ -6,7 +6,7 @@
 
     <groupId>org.linkja</groupId>
     <artifactId>linkja-core</artifactId>
-    <version>1.0.5</version>
+    <version>1.0.6</version>
 
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Shared Java library across linkja projects.</description>
@@ -93,6 +93,9 @@
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven.surefire.version}</version>
+                <configuration>
+                    <argLine>-Djava.library.path=${project.basedir}/lib</argLine>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
