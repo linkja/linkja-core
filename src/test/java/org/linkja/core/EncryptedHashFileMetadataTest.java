@@ -19,7 +19,7 @@ class EncryptedHashFileMetadataTest {
       ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
       BufferedOutputStream outputStream = new BufferedOutputStream(byteStream);
       String siteId = new String(new char[EncryptedHashFileMetadata.INPUT_BUFFER_LENGTH + 1]).replace("\0", "a");
-      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata(siteId, "Test", 10, params);
+      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata(siteId, "Test", 10, 1000, params);
       assertThrows(LinkjaException.class, () -> metadata.write(outputStream, null));
     }
 
@@ -32,7 +32,7 @@ class EncryptedHashFileMetadataTest {
       ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
       BufferedOutputStream outputStream = new BufferedOutputStream(byteStream);
       String projectId = new String(new char[EncryptedHashFileMetadata.INPUT_BUFFER_LENGTH + 1]).replace("\0", "b");
-      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", projectId, 10, params);
+      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", projectId, 10, 1000, params);
       assertThrows(LinkjaException.class, () -> metadata.write(outputStream, null));
     }
 
@@ -44,7 +44,7 @@ class EncryptedHashFileMetadataTest {
       // Initialize and write to memory the bytes for our metadata
       ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
       BufferedOutputStream outputStream = new BufferedOutputStream(byteStream);
-      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", "1234", 10, params);
+      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", "1234", 10, (Integer.MAX_VALUE * 10L), params);
       File publicKeyFile = new File(classLoader.getResource("public-test.key").toURI());
       metadata.write(outputStream, publicKeyFile);
       outputStream.flush();
@@ -68,5 +68,52 @@ class EncryptedHashFileMetadataTest {
       assertEquals(metadata.getAesIvSize(), readMetadata.getAesIvSize());
       assertEquals(metadata.getAesAadSize(), readMetadata.getAesAadSize());
       assertEquals(metadata.getEncryptParameters(), readMetadata.getEncryptParameters());
+
+      inputStream.close();
+      byteInStream.close();
     }
+
+  @Test
+  void writeUpdatedNumHashRows() throws URISyntaxException, IOException, LinkjaException {
+    ClassLoader classLoader = getClass().getClassLoader();
+    AesEncryptParameters params = AesEncryptParameters.generate(32, 16, 128);
+
+    // Initialize and write to memory the bytes for our metadata
+    File file = File.createTempFile("writeUpdatedNumHashRows", ".bin");
+    file.deleteOnExit();
+    FileOutputStream fileStream = new FileOutputStream(file);
+    BufferedOutputStream outputStream = new BufferedOutputStream(fileStream);
+    EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", "1234", 10, 0, params);
+    File publicKeyFile = new File(classLoader.getResource("public-test.key").toURI());
+    metadata.write(outputStream, publicKeyFile);
+    outputStream.flush();
+    outputStream.close();
+    fileStream.close();
+
+    long updatedNumHashRows = 51230439;
+    metadata.setNumHashRows(updatedNumHashRows);
+    metadata.writeUpdatedNumHashRows(file);
+
+
+    // Now read those bytes back to a new metadata object
+    FileInputStream fileInputStream = new FileInputStream(file);
+    BufferedInputStream inputStream = new BufferedInputStream(fileInputStream);
+    File privateKeyFile = new File(classLoader.getResource("private-test.key").toURI());
+    EncryptedHashFileMetadata readMetadata = EncryptedHashFileMetadata.read(inputStream, privateKeyFile);
+
+    assertEquals(updatedNumHashRows, readMetadata.getNumHashRows());
+
+    assertEquals(metadata.getMetadataVersion(), readMetadata.getMetadataVersion());
+    assertEquals(metadata.getSiteId(), readMetadata.getSiteId());
+    assertEquals(metadata.getProjectId(), readMetadata.getProjectId());
+    assertEquals(metadata.getNumHashColumns(), readMetadata.getNumHashColumns());
+    assertEquals(metadata.getEncryptionAlgorithm(), readMetadata.getEncryptionAlgorithm());
+    assertEquals(metadata.getAesKeySize(), readMetadata.getAesKeySize());
+    assertEquals(metadata.getAesIvSize(), readMetadata.getAesIvSize());
+    assertEquals(metadata.getAesAadSize(), readMetadata.getAesAadSize());
+    assertEquals(metadata.getEncryptParameters(), readMetadata.getEncryptParameters());
+
+    inputStream.close();
+    fileInputStream.close();
+  }
 }
