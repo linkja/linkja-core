@@ -5,7 +5,6 @@ import org.linkja.crypto.Library;
 import org.linkja.crypto.RsaResult;
 
 import java.io.*;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 
 public class EncryptedHashFileMetadata {
@@ -60,7 +59,7 @@ public class EncryptedHashFileMetadata {
     stream.write(BLOCK_DELIMITER);
 
     // Version metadata block
-    writeInt(stream, metadataVersion);
+    FileHelper.writeInt(stream, metadataVersion);
     stream.write(BLOCK_DELIMITER);
 
     numHashRowsPosition = METADATA_START_BLOCK.length + (BLOCK_DELIMITER_LEN * 2) + INT_BLOCK_LEN;
@@ -74,23 +73,23 @@ public class EncryptedHashFileMetadata {
       throw new LinkjaException(String.format("The project ID cannot exceed %d bytes, but is %d",
         INPUT_BUFFER_LENGTH, projectId.length()));
     }
-    writeInt(stream, siteId.length());
+    FileHelper.writeInt(stream, siteId.length());
     stream.write(siteId.getBytes());
-    writeInt(stream, projectId.length());
+    FileHelper.writeInt(stream, projectId.length());
     stream.write(projectId.getBytes());
-    writeInt(stream, numHashColumns);
+    FileHelper.writeInt(stream, numHashColumns);
 
     numHashRowsPosition += siteId.length() + projectId.length() + (INT_BLOCK_LEN * 3);
 
-    writeLong(stream, numHashRows);
+    FileHelper.writeLong(stream, numHashRows);
     stream.write(BLOCK_DELIMITER);
 
     // Encryption metadata block
-    writeInt(stream, encryptionAlgorithm.length());
+    FileHelper.writeInt(stream, encryptionAlgorithm.length());
     stream.write(encryptionAlgorithm.getBytes());
-    writeInt(stream, aesKeySize);
-    writeInt(stream, aesIvSize);
-    writeInt(stream, aesAadSize);
+    FileHelper.writeInt(stream, aesKeySize);
+    FileHelper.writeInt(stream, aesIvSize);
+    FileHelper.writeInt(stream, aesAadSize);
     stream.write(BLOCK_DELIMITER);
 
     stream.write(METADATA_END_BLOCK);
@@ -102,12 +101,12 @@ public class EncryptedHashFileMetadata {
 
     byte[] keyBytes = Files.readAllBytes(rsaPublicKey.toPath());
     RsaResult result = Library.rsaEncrypt(encryptParameters.getKey(), keyBytes);
-    writeInt(stream, result.data.length);
+    FileHelper.writeInt(stream, result.data.length);
     stream.write(result.data);
     result = Library.rsaEncrypt(encryptParameters.getIv(), keyBytes);
-    writeInt(stream, result.data.length);
+    FileHelper.writeInt(stream, result.data.length);
     stream.write(result.data);
-    writeInt(stream, encryptParameters.getAad().length);
+    FileHelper.writeInt(stream, encryptParameters.getAad().length);
     stream.write(encryptParameters.getAad());
     stream.write(ENVELOPE_END_BLOCK);
     stream.write(BLOCK_DELIMITER);
@@ -128,7 +127,7 @@ public class EncryptedHashFileMetadata {
 
     try(RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
       raf.seek(numHashRowsPosition);
-      writeLong(raf, this.numHashRows);
+      FileHelper.writeLong(raf, this.numHashRows);
     }
   }
 
@@ -137,7 +136,7 @@ public class EncryptedHashFileMetadata {
     readBlockNameFromStream(stream, "metadata start", METADATA_START_BLOCK);
 
     // Version metadata block
-    int metadataVersion = readInt(stream, "Missing or invalid metadata version in header");
+    int metadataVersion = FileHelper.readInt(stream, "Missing or invalid metadata version in header");
     // For now we only have one version, so it has to match exactly.  In the future this will need to be expanded to
     // handle version compatibility.
     if (metadataVersion != METADATA_VERSION) {
@@ -153,13 +152,13 @@ public class EncryptedHashFileMetadata {
     String projectId = readStringFromStream(stream, "project ID");
     metadata.setProjectId(projectId);
 
-    int numHashColumns = readInt(stream, "Invalid number of hash values in header");
+    int numHashColumns = FileHelper.readInt(stream, "Invalid number of hash values in header");
     if (numHashColumns <= 0) {
       throw new LinkjaException(String.format("Invalid number of hash values in header - there must be at least one, but found %d", numHashColumns));
     }
     metadata.setNumHashColumns(numHashColumns);
 
-    long numHashRows = readLong(stream, "Invalid number of hash rows in header");
+    long numHashRows = FileHelper.readLong(stream, "Invalid number of hash rows in header");
     if (numHashRows < 0) {
       throw new LinkjaException(String.format("Invalid number of hash rows in header - found %d", numHashRows));
     }
@@ -174,19 +173,19 @@ public class EncryptedHashFileMetadata {
     }
     metadata.setEncryptionAlgorithm(encryption);
 
-    int aesKeySize = readInt(stream, "Invalid encryption key size in header");
+    int aesKeySize = FileHelper.readInt(stream, "Invalid encryption key size in header");
     if (aesKeySize <= 0) {
       throw new LinkjaException("Invalid encryption key length (too short) in header");
     }
     metadata.setAesKeySize(aesKeySize);
 
-    int aesIvSize = readInt(stream, "Invalid encryption IV size in header");
+    int aesIvSize = FileHelper.readInt(stream, "Invalid encryption IV size in header");
     if (aesIvSize <= 0) {
       throw new LinkjaException("Invalid encryption IV length (too short) in header");
     }
     metadata.setAesIvSize(aesIvSize);
 
-    int aesAadSize = readInt(stream, "Invalid encryption AAD size in header");
+    int aesAadSize = FileHelper.readInt(stream, "Invalid encryption AAD size in header");
     if (aesAadSize <= 0) {
       throw new LinkjaException("Invalid encryption AAD length (too short) in header");
     }
@@ -241,7 +240,7 @@ public class EncryptedHashFileMetadata {
   }
 
   private static byte[] readByteArrayFromStream(BufferedInputStream stream, String dataElementName) throws LinkjaException, IOException {
-    int dataSize = readInt(stream, String.format("Invalid %s length in header", dataElementName));
+    int dataSize = FileHelper.readInt(stream, String.format("Invalid %s length in header", dataElementName));
     if (dataSize <= 0) {
       throw new LinkjaException(String.format("Invalid %s length (too short) in header", dataElementName));
     }
@@ -252,54 +251,6 @@ public class EncryptedHashFileMetadata {
     }
 
     return buffer;
-  }
-
-  /**
-   * Writes the 32-bit int to the binary output stream.
-   * @param x the {@code int} to write
-   */
-  private static void writeInt(BufferedOutputStream stream, int x) throws IOException {
-    for (int index = Integer.BYTES - 1; index >= 0; index--) {
-      stream.write((byte)((x >>> (8 * index)) & 0xFF));
-    }
-  }
-
-  /**
-   * Writes the 64-bit long to the binary output stream.
-   * @param x the {@code long} to write
-   */
-  private static void writeLong(BufferedOutputStream stream, long x) throws IOException {
-    for (int index = Long.BYTES - 1; index >= 0; index--) {
-      stream.write((byte)((x >>> (8 * index)) & 0xFF));
-    }
-  }
-  private static void writeLong(RandomAccessFile file, long x) throws IOException {
-    for (int index = Long.BYTES - 1; index >= 0; index--) {
-      file.write((byte)((x >>> (8 * index)) & 0xFF));
-    }
-  }
-
-  private static int readInt(BufferedInputStream stream, String exceptionMessage) throws LinkjaException, IOException {
-    byte[] buffer = new byte[Integer.BYTES];
-    int result = stream.read(buffer, 0, Integer.BYTES);
-    if (result != Integer.BYTES) {
-      throw new LinkjaException(exceptionMessage);
-    }
-
-    int value = ByteBuffer.wrap(buffer, 0, Integer.BYTES).getInt();
-    return value;
-  }
-
-  private static long readLong(BufferedInputStream stream, String exceptionMessage) throws LinkjaException, IOException {
-    byte[] buffer = new byte[Long.BYTES];
-
-    int result = stream.read(buffer, 0, Long.BYTES);
-    if (result != Long.BYTES) {
-      throw new LinkjaException(exceptionMessage);
-    }
-
-    long value = ByteBuffer.wrap(buffer, 0, Long.BYTES).getLong();
-    return value;
   }
 
   private static void readBlockDelimiter(BufferedInputStream stream, String position) throws IOException, LinkjaException {
