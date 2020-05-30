@@ -23,35 +23,26 @@ public class EncryptedHashFileMetadata {
   public static final int INPUT_BUFFER_LENGTH = 1024;
 
   private int metadataVersion = METADATA_VERSION;
-  private AesEncryptParameters encryptParameters;
+  private byte[] sessionKey;
   private String siteId;
   private String projectId;
   private int numHashColumns;
   private long numHashRows;
-  private String encryptionAlgorithm;
-  private int aesKeySize;
-  private int aesIvSize;
-  private int aesAadSize;
+  private String cryptoSignature;
 
   private long numHashRowsPosition = -1;
 
   public EncryptedHashFileMetadata() {
   }
 
-  public EncryptedHashFileMetadata(String siteId, String projectId, int numHashColumns, long numHashRows, AesEncryptParameters encryptParameters) {
-    this.encryptParameters = encryptParameters;
+  public EncryptedHashFileMetadata(String siteId, String projectId, int numHashColumns, long numHashRows, byte[] sessionKey, String cryptoSignature) {
+    this.sessionKey = sessionKey;
     this.siteId = siteId;
     this.projectId = projectId;
     this.numHashColumns = numHashColumns;
     this.numHashRows = numHashRows;
-    String encryptionAlgorithm = encryptParameters.getAlgorithmName();
-    if (encryptionAlgorithm.length() > MAX_ENCRYPTION_ALGORITHM_LENGTH) {
-      throw new IllegalArgumentException(String.format("The encryption algorithm cannot be longer than %d characters", MAX_ENCRYPTION_ALGORITHM_LENGTH));
-    }
-    this.encryptionAlgorithm = encryptionAlgorithm.trim();
-    this.aesKeySize = encryptParameters.getKey().length;
-    this.aesIvSize = encryptParameters.getIv().length;
-    this.aesAadSize = encryptParameters.getAad().length;
+    this.sessionKey = sessionKey.clone();
+    this.cryptoSignature = cryptoSignature;
   }
 
   public void write(BufferedOutputStream stream, File rsaPublicKey) throws IOException, LinkjaException {
@@ -84,30 +75,25 @@ public class EncryptedHashFileMetadata {
     FileHelper.writeLong(stream, numHashRows);
     stream.write(BLOCK_DELIMITER);
 
-    // Encryption metadata block
-    FileHelper.writeInt(stream, encryptionAlgorithm.length());
-    stream.write(encryptionAlgorithm.getBytes());
-    FileHelper.writeInt(stream, aesKeySize);
-    FileHelper.writeInt(stream, aesIvSize);
-    FileHelper.writeInt(stream, aesAadSize);
+    // Crypto metadata block
+    FileHelper.writeInt(stream, sessionKey.length);
+    FileHelper.writeInt(stream, cryptoSignature.length());
     stream.write(BLOCK_DELIMITER);
 
     stream.write(METADATA_END_BLOCK);
     stream.write(BLOCK_DELIMITER);
 
-    // Now write out the symmetric key information
+    // Now write out the session key and crypto information
     stream.write(ENVELOPE_START_BLOCK);
     stream.write(BLOCK_DELIMITER);
 
     byte[] keyBytes = Files.readAllBytes(rsaPublicKey.toPath());
-    RsaResult result = Library.rsaEncrypt(encryptParameters.getKey(), keyBytes);
+    RsaResult result = Library.rsaEncrypt(sessionKey, keyBytes);
     FileHelper.writeInt(stream, result.data.length);
     stream.write(result.data);
-    result = Library.rsaEncrypt(encryptParameters.getIv(), keyBytes);
+    result = Library.rsaEncrypt(cryptoSignature.getBytes(), keyBytes);
     FileHelper.writeInt(stream, result.data.length);
     stream.write(result.data);
-    FileHelper.writeInt(stream, encryptParameters.getAad().length);
-    stream.write(encryptParameters.getAad());
     stream.write(ENVELOPE_END_BLOCK);
     stream.write(BLOCK_DELIMITER);
   }
@@ -167,29 +153,15 @@ public class EncryptedHashFileMetadata {
     readBlockDelimiter(stream, "project and site metadata");
 
     // Encryption metadata block
-    String encryption = readStringFromStream(stream, "encryption algorithm");
-    if (!encryption.equals(AesEncryptParameters.ALGORITHM_NAME)) {
-      throw new LinkjaException(String.format("Invalid encryption algorithm (%s) in header.  Currently only %s is supported.", encryption, AesEncryptParameters.ALGORITHM_NAME));
+    int sessionKeySize = FileHelper.readInt(stream, "Invalid session key size in header");
+    if (sessionKeySize <= 0) {
+      throw new LinkjaException("Invalid session key length (too short) in header");
     }
-    metadata.setEncryptionAlgorithm(encryption);
 
-    int aesKeySize = FileHelper.readInt(stream, "Invalid encryption key size in header");
-    if (aesKeySize <= 0) {
-      throw new LinkjaException("Invalid encryption key length (too short) in header");
+    int cryptoSignatureSize = FileHelper.readInt(stream, "Invalid crypto signature size in header");
+    if (cryptoSignatureSize <= 0) {
+      throw new LinkjaException("Invalid crypto signature size (too short) in header");
     }
-    metadata.setAesKeySize(aesKeySize);
-
-    int aesIvSize = FileHelper.readInt(stream, "Invalid encryption IV size in header");
-    if (aesIvSize <= 0) {
-      throw new LinkjaException("Invalid encryption IV length (too short) in header");
-    }
-    metadata.setAesIvSize(aesIvSize);
-
-    int aesAadSize = FileHelper.readInt(stream, "Invalid encryption AAD size in header");
-    if (aesAadSize <= 0) {
-      throw new LinkjaException("Invalid encryption AAD length (too short) in header");
-    }
-    metadata.setAesAadSize(aesAadSize);
 
     readBlockDelimiter(stream, "encryption metadata");
 
@@ -198,15 +170,11 @@ public class EncryptedHashFileMetadata {
     readBlockNameFromStream(stream, "envelope start", ENVELOPE_START_BLOCK);
 
     byte[] rsaPrivateKeyBytes = Files.readAllBytes(rsaPrivateKey.toPath());
-    byte[] aesKey = readAndDecryptFromStream(stream, rsaPrivateKeyBytes, "encryption key", aesKeySize);
-    byte[] aesIv = readAndDecryptFromStream(stream, rsaPrivateKeyBytes, "encryption IV", aesIvSize);
-    byte[] aesAad = readByteArrayFromStream(stream, "encryption AAD");
-    if (aesAad.length != aesAadSize) {
-      throw new LinkjaException("The encryption AAD was corrupted and could not be read from the header");
-    }
+    byte[] sessionKey = readAndDecryptFromStream(stream, rsaPrivateKeyBytes, "session key", sessionKeySize);
+    String cryptoSignature = new String(readAndDecryptFromStream(stream, rsaPrivateKeyBytes, "crypto signature", cryptoSignatureSize));
 
-    AesEncryptParameters parameters = new AesEncryptParameters(aesKey, aesIv, aesAad);
-    metadata.setEncryptParameters(parameters);
+    metadata.setSessionKey(sessionKey);
+    metadata.setCryptoSignature(cryptoSignature);
 
     readBlockNameFromStream(stream, "envelope end", ENVELOPE_END_BLOCK);
 
@@ -269,14 +237,6 @@ public class EncryptedHashFileMetadata {
     this.metadataVersion = metadataVersion;
   }
 
-  public AesEncryptParameters getEncryptParameters() {
-    return encryptParameters;
-  }
-
-  public void setEncryptParameters(AesEncryptParameters encryptParameters) {
-    this.encryptParameters = encryptParameters;
-  }
-
   public String getSiteId() {
     return siteId;
   }
@@ -301,43 +261,27 @@ public class EncryptedHashFileMetadata {
     this.numHashColumns = numHashColumns;
   }
 
-  public String getEncryptionAlgorithm() {
-    return encryptionAlgorithm;
-  }
-
-  public void setEncryptionAlgorithm(String encryptionAlgorithm) {
-    this.encryptionAlgorithm = encryptionAlgorithm;
-  }
-
-  public int getAesKeySize() {
-    return aesKeySize;
-  }
-
-  public void setAesKeySize(int aesKeySize) {
-    this.aesKeySize = aesKeySize;
-  }
-
-  public int getAesIvSize() {
-    return aesIvSize;
-  }
-
-  public void setAesIvSize(int aesIvSize) {
-    this.aesIvSize = aesIvSize;
-  }
-
-  public int getAesAadSize() {
-    return aesAadSize;
-  }
-
-  public void setAesAadSize(int aesAadSize) {
-    this.aesAadSize = aesAadSize;
-  }
-
   public long getNumHashRows() {
     return numHashRows;
   }
 
   public void setNumHashRows(long numHashRows) {
     this.numHashRows = numHashRows;
+  }
+
+  public byte[] getSessionKey() {
+    return sessionKey;
+  }
+
+  public void setSessionKey(byte[] sessionKey) {
+    this.sessionKey = sessionKey;
+  }
+
+  public String getCryptoSignature() {
+    return cryptoSignature;
+  }
+
+  public void setCryptoSignature(String cryptoSignature) {
+    this.cryptoSignature = cryptoSignature;
   }
 }

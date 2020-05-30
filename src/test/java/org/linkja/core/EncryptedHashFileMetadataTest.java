@@ -5,6 +5,7 @@ import org.linkja.core.crypto.AesEncryptParameters;
 
 import java.io.*;
 import java.net.URISyntaxException;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -13,38 +14,39 @@ class EncryptedHashFileMetadataTest {
     @Test
     void write_invalidSiteLength() throws URISyntaxException, IOException, LinkjaException {
       ClassLoader classLoader = getClass().getClassLoader();
-      AesEncryptParameters params = AesEncryptParameters.generate(32, 16, 128);
+      byte[] sessionKey = AesEncryptParameters.generate(32, 16, 128).getKey();
 
       // Initialize and write to memory the bytes for our metadata
       ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
       BufferedOutputStream outputStream = new BufferedOutputStream(byteStream);
       String siteId = new String(new char[EncryptedHashFileMetadata.INPUT_BUFFER_LENGTH + 1]).replace("\0", "a");
-      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata(siteId, "Test", 10, 1000, params);
+      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata(siteId, "Test", 10, 1000, sessionKey, "ABCDEFG");
       assertThrows(LinkjaException.class, () -> metadata.write(outputStream, null));
     }
 
     @Test
     void write_invalidProjectLength() throws URISyntaxException, IOException, LinkjaException {
       ClassLoader classLoader = getClass().getClassLoader();
-      AesEncryptParameters params = AesEncryptParameters.generate(32, 16, 128);
+      byte[] sessionKey = AesEncryptParameters.generate(32, 16, 128).getKey();
 
       // Initialize and write to memory the bytes for our metadata
       ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
       BufferedOutputStream outputStream = new BufferedOutputStream(byteStream);
       String projectId = new String(new char[EncryptedHashFileMetadata.INPUT_BUFFER_LENGTH + 1]).replace("\0", "b");
-      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", projectId, 10, 1000, params);
+      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", projectId, 10, 1000, sessionKey, "ABCDEFG");
       assertThrows(LinkjaException.class, () -> metadata.write(outputStream, null));
     }
 
     @Test
     void write_read_fullCycle() throws URISyntaxException, IOException, LinkjaException {
       ClassLoader classLoader = getClass().getClassLoader();
-      AesEncryptParameters params = AesEncryptParameters.generate(32, 16, 128);
+      byte[] sessionKey = AesEncryptParameters.generate(32, 16, 128).getKey();
+      String cryptoSignature = "ABCDABCDABCDABCDABCDABCDABCDABCD";
 
       // Initialize and write to memory the bytes for our metadata
       ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
       BufferedOutputStream outputStream = new BufferedOutputStream(byteStream);
-      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", "1234", 10, (Integer.MAX_VALUE * 10L), params);
+      EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", "1234", 10, (Integer.MAX_VALUE * 10L), sessionKey, cryptoSignature);
       File publicKeyFile = new File(classLoader.getResource("public-test.key").toURI());
       metadata.write(outputStream, publicKeyFile);
       outputStream.flush();
@@ -63,11 +65,8 @@ class EncryptedHashFileMetadataTest {
       assertEquals(metadata.getSiteId(), readMetadata.getSiteId());
       assertEquals(metadata.getProjectId(), readMetadata.getProjectId());
       assertEquals(metadata.getNumHashColumns(), readMetadata.getNumHashColumns());
-      assertEquals(metadata.getEncryptionAlgorithm(), readMetadata.getEncryptionAlgorithm());
-      assertEquals(metadata.getAesKeySize(), readMetadata.getAesKeySize());
-      assertEquals(metadata.getAesIvSize(), readMetadata.getAesIvSize());
-      assertEquals(metadata.getAesAadSize(), readMetadata.getAesAadSize());
-      assertEquals(metadata.getEncryptParameters(), readMetadata.getEncryptParameters());
+      assertEquals(metadata.getCryptoSignature(), readMetadata.getCryptoSignature());
+      assertTrue(Arrays.equals(metadata.getSessionKey(), readMetadata.getSessionKey()));
 
       inputStream.close();
       byteInStream.close();
@@ -76,14 +75,15 @@ class EncryptedHashFileMetadataTest {
   @Test
   void writeUpdatedNumHashRows() throws URISyntaxException, IOException, LinkjaException {
     ClassLoader classLoader = getClass().getClassLoader();
-    AesEncryptParameters params = AesEncryptParameters.generate(32, 16, 128);
+    byte[] sessionKey = AesEncryptParameters.generate(32, 16, 128).getKey();
+    String cryptoSignature = "ABCDABCDABCDABCDABCDABCDABCDABCD";
 
     // Initialize and write to memory the bytes for our metadata
     File file = File.createTempFile("writeUpdatedNumHashRows", ".bin");
     file.deleteOnExit();
     FileOutputStream fileStream = new FileOutputStream(file);
     BufferedOutputStream outputStream = new BufferedOutputStream(fileStream);
-    EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", "1234", 10, 0, params);
+    EncryptedHashFileMetadata metadata = new EncryptedHashFileMetadata("Test", "1234", 10, 0, sessionKey, cryptoSignature);
     File publicKeyFile = new File(classLoader.getResource("public-test.key").toURI());
     metadata.write(outputStream, publicKeyFile);
     outputStream.flush();
@@ -107,11 +107,8 @@ class EncryptedHashFileMetadataTest {
     assertEquals(metadata.getSiteId(), readMetadata.getSiteId());
     assertEquals(metadata.getProjectId(), readMetadata.getProjectId());
     assertEquals(metadata.getNumHashColumns(), readMetadata.getNumHashColumns());
-    assertEquals(metadata.getEncryptionAlgorithm(), readMetadata.getEncryptionAlgorithm());
-    assertEquals(metadata.getAesKeySize(), readMetadata.getAesKeySize());
-    assertEquals(metadata.getAesIvSize(), readMetadata.getAesIvSize());
-    assertEquals(metadata.getAesAadSize(), readMetadata.getAesAadSize());
-    assertEquals(metadata.getEncryptParameters(), readMetadata.getEncryptParameters());
+    assertEquals(metadata.getCryptoSignature(), readMetadata.getCryptoSignature());
+    assertTrue(Arrays.equals(metadata.getSessionKey(), readMetadata.getSessionKey()));
 
     inputStream.close();
     fileInputStream.close();
